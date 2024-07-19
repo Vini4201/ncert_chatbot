@@ -51,6 +51,43 @@ def aiPost():
     return response_answer
 
 
+# @app.route("/ask_pdf", methods=["POST"])
+# def askPDFPost():
+#     print("Post /ask_pdf called")
+#     json_content = request.json
+#     query = json_content.get("query")
+
+#     print(f"query: {query}")
+
+#     print("Loading vector store")
+#     vector_store = Chroma(persist_directory=folder_path, embedding_function=embedding)
+
+#     print("Creating chain")
+#     retriever = vector_store.as_retriever(
+#         search_type="similarity_score_threshold",
+#         search_kwargs={
+#             "k": 20,
+#             "score_threshold": 0.1,
+#         },
+#     )
+
+#     document_chain = create_stuff_documents_chain(cached_llm, raw_prompt)
+#     chain = create_retrieval_chain(retriever, document_chain)
+
+#     result = chain.invoke({"input": query})
+
+#     print(result)
+
+#     sources = []
+#     for doc in result["context"]:
+#         sources.append(
+#             {"source": doc.metadata["source"], "page_content": doc.page_content}
+#         )
+
+#     response_answer = {"answer": result["answer"], "sources": sources}
+#     return response_answer
+
+
 @app.route("/ask_pdf", methods=["POST"])
 def askPDFPost():
     print("Post /ask_pdf called")
@@ -62,6 +99,10 @@ def askPDFPost():
     print("Loading vector store")
     vector_store = Chroma(persist_directory=folder_path, embedding_function=embedding)
 
+    # Debug: Check if vector store contains documents
+    documents = vector_store.get_all_documents()
+    print(f"Documents in vector store: {documents}")
+
     print("Creating chain")
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
@@ -70,6 +111,11 @@ def askPDFPost():
             "score_threshold": 0.1,
         },
     )
+
+    # Debug: Check retriever functionality
+    print("Testing retriever")
+    test_results = retriever.retrieve(query)
+    print(f"Retriever results: {test_results}")
 
     document_chain = create_stuff_documents_chain(cached_llm, raw_prompt)
     chain = create_retrieval_chain(retriever, document_chain)
@@ -88,6 +134,37 @@ def askPDFPost():
     return response_answer
 
 
+
+# @app.route("/pdf", methods=["POST"])
+# def pdfPost():
+#     file = request.files["file"]
+#     file_name = file.filename
+#     save_file = "pdf/" + file_name
+#     file.save(save_file)
+#     print(f"filename: {file_name}")
+
+#     loader = PDFPlumberLoader(save_file)
+#     docs = loader.load_and_split()
+#     print(f"docs len={len(docs)}")
+
+#     chunks = text_splitter.split_documents(docs)
+#     print(f"chunks len={len(chunks)}")
+
+#     vector_store = Chroma.from_documents(
+#         documents=chunks, embedding=embedding, persist_directory=folder_path
+#     )
+
+#     vector_store.persist()
+
+#     response = {
+#         "status": "Successfully Uploaded",
+#         "filename": file_name,
+#         "doc_len": len(docs),
+#         "chunks": len(chunks),
+#     }
+#     return response
+
+
 @app.route("/pdf", methods=["POST"])
 def pdfPost():
     file = request.files["file"]
@@ -103,10 +180,13 @@ def pdfPost():
     chunks = text_splitter.split_documents(docs)
     print(f"chunks len={len(chunks)}")
 
+    # Debug: Print the content of a few chunks
+    for i, chunk in enumerate(chunks[:5]):
+        print(f"Chunk {i}: {chunk}")
+
     vector_store = Chroma.from_documents(
         documents=chunks, embedding=embedding, persist_directory=folder_path
     )
-
     vector_store.persist()
 
     response = {
@@ -116,6 +196,7 @@ def pdfPost():
         "chunks": len(chunks),
     }
     return response
+
 
 
 def start_app():
