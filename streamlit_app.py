@@ -1,6 +1,9 @@
 import streamlit as st
 import requests
 
+# Replace with your Ngrok public URL
+ngrok_url = "https://1ab5-2401-4900-1c97-194-fc5e-448e-fb6-acba.ngrok-free.app"
+
 # Title and description
 st.title("NCERT Curriculum Assistant Chatbot")
 st.write("Upload a PDF and interact with the Llama3 chatbot to get answers based on the document content.")
@@ -18,7 +21,7 @@ if uploaded_file is not None:
     
     # Send the file to the backend
     files = {"file": open(f"pdf/{uploaded_file.name}", "rb")}
-    response = requests.post("http://localhost:8080/pdf", files=files)
+    response = requests.post(f"{ngrok_url}/pdf", files=files)
     
     if response.status_code == 200:
         st.write("PDF processed successfully!")
@@ -32,7 +35,7 @@ user_query = st.text_input("Enter your query")
 if st.button("Get Answer"):
     if user_query:
         # Send the query to the backend
-        response = requests.post("http://localhost:8080/ask_pdf", json={"query": user_query})
+        response = requests.post(f"{ngrok_url}/ask_pdf", json={"query": user_query})
         
         if response.status_code == 200:
             result = response.json()
