@@ -11,6 +11,7 @@ from langchain.prompts import PromptTemplate
 import PyPDF2
 from langchain.vectorstores import Chroma
 from langchain.embeddings import OpenAIEmbeddings
+import logging
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
@@ -144,6 +145,9 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 app = Flask(__name__)
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
 # Function to add documents to vector store and log them
 def add_documents_to_vector_store(documents):
     vector_store = Chroma(embedding_function=OpenAIEmbeddings())
@@ -162,13 +166,13 @@ def upload_pdf():
     file.save(filepath)
     
     # Parse the PDF and log content
+    documents = []
     with open(filepath, "rb") as f:
         reader = PyPDF2.PdfFileReader(f)
-        documents = []
         for page_num in range(reader.numPages):
             page = reader.getPage(page_num)
             text = page.extractText()
-            print(f"Page {page_num}: {text[:500]}")  # Log the first 500 characters of each page
+            logging.info(f"Page {page_num}: {text[:500]}")  # Log the first 500 characters of each page
             documents.append({"content": text})
     
     # Add documents to vector store
@@ -180,11 +184,15 @@ def upload_pdf():
 def get_answer_from_vector_store(query):
     vector_store = Chroma(embedding_function=OpenAIEmbeddings())
     results = vector_store.query(query, top_k=5, threshold=0.05)  # Adjust threshold and top_k as needed
-    answer = results["answer"]
-    sources = results["sources"]
+    if results["documents"]:
+        answer = results["documents"][0]["content"]
+        sources = results["documents"]
+    else:
+        answer = "No relevant documents found."
+        sources = []
     return answer, sources
 
-# Endpoint to handle queries
+# Endpoint to handle queries related to the PDF
 @app.route('/ask_pdf', methods=['POST'])
 def ask_pdf():
     data = request.get_json()
