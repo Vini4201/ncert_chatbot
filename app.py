@@ -12,6 +12,10 @@ import PyPDF2
 from langchain.vectorstores import Chroma
 from langchain.embeddings import OpenAIEmbeddings
 import logging
+from langchain.chains import RetrievalQA
+from langchain.document_loaders import PDFLoader
+from langchain.llms import OpenAI
+from werkzeug.utils import secure_filename
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
@@ -145,6 +149,12 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 app = Flask(__name__)
 
+# Ensure the 'pdf' directory exists
+if not os.path.exists("pdf"):
+    os.makedirs("pdf")
+
+vector_store = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
@@ -156,50 +166,47 @@ def add_documents_to_vector_store(documents):
         print(f"Added document: {doc['content'][:500]}")  # Log the first 500 characters of each document
     return vector_store
 
-# Endpoint to upload and process PDF
 @app.route('/pdf', methods=['POST'])
 def upload_pdf():
+    global vector_store
+    
     if 'file' not in request.files:
         return "No file part", 400
     file = request.files['file']
-    filepath = os.path.join("pdf", file.filename)
+    filename = secure_filename(file.filename)
+    filepath = os.path.join("pdf", filename)
     file.save(filepath)
     
-    # Parse the PDF and log content
+    # Process PDF and create vector store
     documents = []
-    with open(filepath, "rb") as f:
-        reader = PyPDF2.PdfFileReader(f)
-        for page_num in range(reader.numPages):
-            page = reader.getPage(page_num)
-            text = page.extractText()
-            logging.info(f"Page {page_num}: {text[:500]}")  # Log the first 500 characters of each page
-            documents.append({"content": text})
-    
-    # Add documents to vector store
-    vector_store = add_documents_to_vector_store(documents)
-    
-    return "PDF processed", 200
+    loader = PDFLoader(filepath)
+    documents.extend(loader.load())
 
-# Function to retrieve answer from vector store
-def get_answer_from_vector_store(query):
     vector_store = Chroma(embedding_function=OpenAIEmbeddings())
-    results = vector_store.query(query, top_k=5, threshold=0.05)  # Adjust threshold and top_k as needed
-    if results["documents"]:
-        answer = results["documents"][0]["content"]
-        sources = results["documents"]
-    else:
-        answer = "No relevant documents found."
-        sources = []
-    return answer, sources
+    vector_store.add_documents(documents)
+    
+    for doc in documents:
+        print(f"Added document: {doc['content'][:500]}")  # Log the first 500 characters of each document
+
+    return "PDF processed", 200
 
 # Endpoint to handle queries related to the PDF
 @app.route('/ask_pdf', methods=['POST'])
 def ask_pdf():
+    global vector_store
+    
+    if vector_store is None:
+        return jsonify({"error": "No documents available. Please upload a PDF first."}), 400
+    
     data = request.get_json()
     query = data['query']
     
-    # Retrieve answer from vector store
-    answer, sources = get_answer_from_vector_store(query)
+    # Query the vector store
+    results = vector_store.query(query, top_k=5, threshold=0.05)
+    if not results:
+        return jsonify({"answer": "No relevant documents found.", "sources": []})
+    
+    answer, sources = results[0]['content'], results[0]['metadata']
     return jsonify({'answer': answer, 'sources': sources})
 
 # Additional endpoint to handle other AI-related queries
